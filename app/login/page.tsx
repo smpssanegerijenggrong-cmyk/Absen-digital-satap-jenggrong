@@ -22,8 +22,8 @@ export default async function Login({searchParams}:{searchParams:Promise<{next?:
    {missing.length>0&&
     <div role="status" className="alert">
      <div>
-      <b>Konfigurasi server belum lengkap</b>
-      <p>Form login tetap tersedia. Agar login berhasil, atur {missing.join(', ')} pada Environment Variables Vercel lalu redeploy.</p>
+      <b>Database belum terhubung</b>
+      <p>Atur DATABASE_URL pada Environment Variables Vercel lalu redeploy.</p>
      </div>
     </div>
    }
@@ -33,7 +33,7 @@ export default async function Login({searchParams}:{searchParams:Promise<{next?:
      <div>
       <b>Server/database belum siap</b>
       <p>{readiness.error}</p>
-      <p>Form login tetap ditampilkan. Periksa koneksi database lalu redeploy.</p>
+      <p>Periksa migrasi database lalu muat ulang halaman.</p>
      </div>
     </div>
    }

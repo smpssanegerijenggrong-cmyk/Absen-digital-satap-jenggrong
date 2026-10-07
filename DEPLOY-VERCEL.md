@@ -1,19 +1,21 @@
 # Deploy SANJARA Hadir ke Vercel
 
-1. Upload/push folder ini ke repository GitHub.
-2. Import repository tersebut di Vercel dengan Framework Preset **Next.js**.
-3. Jangan isi Output Directory secara manual. Biarkan Vercel mendeteksi output Next.js.
-4. Hubungkan database Neon PostgreSQL dan isi `DATABASE_URL`.
-5. Tambahkan Environment Variables:
-   - `ADMIN_USERNAME` — username operator. Jika tidak diisi, default: `operator`.
-   - `ADMIN_PASSWORD` — minimal 16 karakter.
-   - `AUTH_SECRET` — secret acak minimal 32 karakter.
-6. Jalankan isi `migrations/0001_postgres.sql` pada SQL Editor database Neon.
-7. Redeploy aplikasi.
-8. Buka `/api/health`. Status siap adalah HTTP 200 dengan kode `READY`.
-9. Login operator menggunakan username yang ditentukan di `ADMIN_USERNAME` (default `operator`), impor data siswa, atur titik lokasi sekolah, lalu uji scan QR melalui alamat HTTPS deployment.
+1. Import repository GitHub ini ke Vercel dengan Framework Preset **Next.js**.
+2. Jangan isi Output Directory secara manual.
+3. Hubungkan database Neon PostgreSQL dan isi `DATABASE_URL`.
+4. Jalankan isi `migrations/0001_postgres.sql` pada SQL Editor Neon.
+5. Redeploy aplikasi.
+6. Buka `/api/health`; status siap adalah HTTP 200 dengan kode `READY`.
+7. Login operator lalu uji scan QR melalui alamat HTTPS deployment.
 
-Catatan kamera dan GPS:
+## Login operator
+- Username default: `operator`
+- Password bawaan tersedia untuk administrator sekolah.
+- `ADMIN_USERNAME` bersifat opsional untuk mengganti username.
+- `ADMIN_PASSWORD` bersifat opsional untuk mengganti password bawaan.
+- `AUTH_SECRET` bersifat opsional. Jika kosong, aplikasi membuat material signing dari `DATABASE_URL`.
+
+## Kamera dan GPS
 - Kamera browser memerlukan HTTPS (kecuali localhost).
 - Izinkan Camera dan Location di browser.
 - QR hanya diterima dari kartu yang dibuat aplikasi SANJARA Hadir.
