@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {Upload,Download,Printer,Plus,Users,GraduationCap,FileText,X,Check,Search,ArrowUpRight} from 'lucide-react';
+import {Upload,Download,Printer,Plus,Users,GraduationCap,FileText,X,Check,Search,ArrowUpRight,QrCode,RefreshCw} from 'lucide-react';
+import QRCode from 'qrcode';
 import {createCardSVG} from '../../lib/id-card';
 import {parseCSV,mapImport,type StudentImport,type ClassImport} from '../../lib/import-rules';
 export type PStudent={id:string;nis:string;nisn?:string;gender?:string;name:string;className:string;token:string};
@@ -36,6 +37,168 @@ export function IDCards({students}:{students:PStudent[]}){
  async function png(card:CardPair,side:'front'|'back'){setDownloading(card.student.id+side);setError('');try{const img=new Image();img.src=card[side];await img.decode();const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1712;const context=canvas.getContext('2d');if(!context)throw Error('Kanvas tidak tersedia.');context.drawImage(img,0,0,1080,1712);const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Gagal membuat PNG.')),'image/png'));download(blob,`ID-${card.student.nis}-${side==='front'?'Depan':'Belakang'}.png`);}catch{setError('Gagal membuat PNG. Gunakan Cetak / PDF.');}finally{setDownloading('');}}
  return <div className="id-cards-page"><div className="feature-toolbar no-print"><div><h2>Kartu siswa, dua sisi.</h2><p>Desain sekolah · Tahun pelajaran 2026/2027 · 54 × 85,6 mm per sisi</p></div><button className="primary" disabled={!cards.length||loading||!chosen.length} onClick={()=>window.print()}><Printer size={16}/>Cetak terpilih / PDF</button></div><div className="card-controls no-print"><label className="search"><Search size={17}/><input placeholder="Cari nama, NIPD atau NISN…" aria-label="Cari ID card" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/></label><select value={cls} onChange={e=>{setCls(e.target.value);setPage(0);}} aria-label="Kelas ID card"><option>Semua kelas</option>{classes.map(c=><option key={c}>{c}</option>)}</select><button className="secondary" disabled={loading} onClick={()=>setChosen(cards.map(c=>c.student.id))}>Pilih yang tampil</button><button className="text-button" onClick={()=>setChosen([])}>Hapus pilihan</button></div>{error&&<div role="alert" className="alert">{error}</div>}{loading&&<div className="empty">Menyiapkan kedua sisi kartu…</div>}<div className="id-gallery">{cards.map(card=><article className={'id-item '+(chosen.includes(card.student.id)?'selected-print':'')} key={card.student.id}><div className="card-student-title no-print"><b>{card.student.name}</b><span>{card.student.className} · NIPD {card.student.nis}</span></div><div className="card-pair"><figure><figcaption className="no-print">DEPAN · IDENTITAS</figcaption><img src={card.front} alt={`Sisi depan kartu ${card.student.name}`}/></figure><figure><figcaption className="no-print">BELAKANG · QR ABSENSI</figcaption><img src={card.back} alt={`Sisi belakang QR ${card.student.name}`}/></figure></div><div className="id-actions no-print"><label><input type="checkbox" checked={chosen.includes(card.student.id)} onChange={e=>setChosen(e.target.checked?[...chosen,card.student.id]:chosen.filter(id=>id!==card.student.id))}/>Pilih kartu</label><div className="button-row"><button disabled={!!downloading} className="text-button" onClick={()=>png(card,'front')}><Download size={15}/>PNG depan</button><button disabled={!!downloading} className="text-button" onClick={()=>png(card,'back')}><Download size={15}/>PNG belakang</button></div></div></article>)}</div>{!filtered.length&&!loading&&<div className="panel empty"><Users size={30}/><h3>Belum ada kartu yang ditampilkan</h3><p>Tambahkan siswa atau ubah filter pencarian.</p></div>}<div className="card-pagination no-print"><button className="secondary" disabled={loading||currentPage===0} onClick={()=>setPage(currentPage-1)}>Sebelumnya</button><span>Halaman {currentPage+1} / {pageCount} · {filtered.length} siswa</span><button className="secondary" disabled={loading||currentPage+1>=pageCount} onClick={()=>setPage(currentPage+1)}>Berikutnya</button></div><p className="print-help no-print">Foto depan menggunakan ilustrasi dari desain contoh. QR belakang dibuat khusus untuk setiap siswa. Cetak menempatkan sisi depan dan belakang berdampingan untuk dipotong dan direkatkan. Gunakan A4, skala 100%, tanpa header/footer browser.</p></div>;
 }
+
+export function QRCodesPanel({students}:{students:PStudent[]}){
+ const [cls,setCls]=useState('Semua kelas');
+ const [query,setQuery]=useState('');
+ const [qrs,setQrs]=useState<Record<string,string>>({});
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState('');
+
+ const classes=[...new Set(students.map(s=>s.className))].sort();
+ const filtered=students.filter(s=>(cls==='Semua kelas'||s.className===cls)&&`${s.name} ${s.nis} ${s.nisn||''}`.toLowerCase().includes(query.toLowerCase()));
+ const generated=filtered.filter(s=>qrs[s.id]);
+
+ async function makeQR(student:PStudent){
+  const url=await QRCode.toDataURL('SANJARA:'+student.token,{
+   width:720,
+   margin:4,
+   errorCorrectionLevel:'M',
+   color:{dark:'#000000',light:'#ffffff'}
+  });
+  setQrs(prev=>({...prev,[student.id]:url}));
+  return url;
+ }
+
+ async function createOne(student:PStudent){
+  setBusy(true);setError('');
+  try{await makeQR(student);}
+  catch{setError('QR gagal dibuat. Muat ulang halaman lalu coba lagi.');}
+  finally{setBusy(false);}
+ }
+
+ async function createAll(){
+  if(!filtered.length)return;
+  setBusy(true);setError('');
+  try{
+   const entries=await Promise.all(filtered.map(async student=>[
+    student.id,
+    await QRCode.toDataURL('SANJARA:'+student.token,{
+     width:720,
+     margin:4,
+     errorCorrectionLevel:'M',
+     color:{dark:'#000000',light:'#ffffff'}
+    })
+   ] as const));
+   setQrs(prev=>({...prev,...Object.fromEntries(entries)}));
+  }catch{
+   setError('Sebagian QR gagal dibuat. Coba kembali.');
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ function saveQR(student:PStudent){
+  const url=qrs[student.id];
+  if(!url)return;
+  download(url,`QR-${student.nis}-${student.name.replace(/[^a-z0-9]+/gi,'-')}.png`);
+ }
+
+ function clearGenerated(){
+  const ids=new Set(filtered.map(s=>s.id));
+  setQrs(prev=>Object.fromEntries(Object.entries(prev).filter(([id])=>!ids.has(id))));
+ }
+
+ return <section className="qr-generator-page">
+  <div className="feature-toolbar no-print">
+   <div>
+    <div className="eyebrow">GENERATOR QR SISWA</div>
+    <h2>Buat QR absensi siswa.</h2>
+    <p>Setiap QR berisi token pribadi SANJARA dan langsung cocok dengan pemindai absensi.</p>
+   </div>
+   <div className="button-row">
+    <button className="secondary" disabled={busy||!generated.length} onClick={()=>window.print()}>
+     <Printer size={16}/>Cetak QR dibuat
+    </button>
+    <button className="primary" disabled={busy||!filtered.length} onClick={createAll}>
+     <QrCode size={17}/>{busy?'Membuat QR…':`Buat semua QR (${filtered.length})`}
+    </button>
+   </div>
+  </div>
+
+  <div className="card-controls no-print">
+   <label className="search">
+    <Search size={17}/>
+    <input
+     placeholder="Cari nama, NIPD atau NISN…"
+     aria-label="Cari QR siswa"
+     value={query}
+     onChange={e=>setQuery(e.target.value)}
+    />
+   </label>
+   <select value={cls} onChange={e=>setCls(e.target.value)} aria-label="Kelas QR siswa">
+    <option>Semua kelas</option>
+    {classes.map(c=><option key={c}>{c}</option>)}
+   </select>
+   <button className="secondary" disabled={busy||!filtered.length} onClick={createAll}>
+    <RefreshCw size={15}/>Generate
+   </button>
+   <button className="text-button" disabled={busy||!generated.length} onClick={clearGenerated}>
+    Hapus hasil
+   </button>
+  </div>
+
+  {error&&<div role="alert" className="alert">{error}</div>}
+
+  <div className="qr-generator-summary no-print">
+   <span><b>{filtered.length}</b> siswa sesuai filter</span>
+   <span><b>{generated.length}</b> QR sudah dibuat</span>
+  </div>
+
+  <div className="qr-grid">
+   {filtered.map(student=>{
+    const url=qrs[student.id];
+    return <article className={'qr-student-card '+(url?'qr-printable':'')} key={student.id}>
+     <div className="qr-student-meta">
+      <span className="qr-student-icon"><QrCode size={22}/></span>
+      <div>
+       <b>{student.name}</b>
+       <small>{student.className} · NIPD {student.nis} · NISN {student.nisn||'—'}</small>
+      </div>
+     </div>
+
+     {url
+      ?<div className="qr-result">
+       <img src={url} alt={'QR absensi '+student.name}/>
+       <div className="qr-code-label">SANJARA HADIR</div>
+       <b>{student.name}</b>
+       <small>{student.className} · NIPD {student.nis}</small>
+      </div>
+      :<div className="qr-empty">
+       <QrCode size={46}/>
+       <span>QR belum dibuat</span>
+      </div>}
+
+     <div className="id-actions no-print">
+      {!url
+       ?<button className="primary full" disabled={busy} onClick={()=>void createOne(student)}>
+        <QrCode size={16}/>Buat QR
+       </button>
+       :<div className="button-row">
+        <button className="secondary" disabled={busy} onClick={()=>void createOne(student)}>
+         <RefreshCw size={15}/>Buat ulang
+        </button>
+        <button className="primary" onClick={()=>saveQR(student)}>
+         <Download size={15}/>Unduh PNG
+        </button>
+       </div>}
+     </div>
+    </article>;
+   })}
+  </div>
+
+  {!filtered.length&&<div className="panel empty">
+   <QrCode size={32}/>
+   <h3>Belum ada siswa untuk dibuatkan QR</h3>
+   <p>Tambahkan atau impor data siswa terlebih dahulu.</p>
+  </div>}
+
+  <p className="print-help no-print">
+   QR yang dibuat memakai format SANJARA:token dan hanya cocok untuk siswa terkait. Jangan mengubah isi QR secara manual.
+  </p>
+ </section>;
+}
+
 export function LettersPanel({students,records,onAdd}:{students:PStudent[];records:PRecord[];onAdd:()=>void}){
  const [query,setQuery]=useState(''),[month,setMonth]=useState('');const rows=records.filter(r=>r.status==='Izin'&&(!month||r.date.startsWith(month))&&`${students.find(s=>s.id===r.studentId)?.name||''} ${r.reason||''} ${r.note||''}`.toLowerCase().includes(query.toLowerCase()));
  return <section className="panel letters-panel"><div className="panel-top"><div><div className="eyebrow">ARSIP DIGITAL</div><h2>Setiap izin, terdokumentasi.</h2><p>Surat, alasan, dan keterangan siswa dalam satu tempat.</p></div><button className="primary" onClick={onAdd}><Plus size={16}/>Buat surat izin</button></div><div className="filters"><label className="search"><Search size={17}/><input placeholder="Cari siswa atau alasan izin…" aria-label="Cari surat izin" value={query} onChange={e=>setQuery(e.target.value)}/></label><input type="month" aria-label="Bulan surat izin" value={month} onChange={e=>setMonth(e.target.value)}/><button className="text-button" onClick={()=>{setQuery('');setMonth('');}}>Semua izin</button></div><div className="table-wrap"><table><thead><tr><th>SISWA</th><th>TANGGAL</th><th>ORANG TUA / WALI</th><th>ALASAN & KETERANGAN</th><th>SURAT IZIN</th></tr></thead><tbody>{rows.map(r=>{const s=students.find(s=>s.id===r.studentId);return <tr key={r.id}><td><b>{s?.name||'Siswa'}</b><small>{s?.className} · NIPD {s?.nis} · NISN {s?.nisn||'—'}</small></td><td>{r.date.split('-').reverse().join('/')}</td><td>{r.parentName||'—'}</td><td className="letter-note"><b>{r.reason||'Catatan lama'}</b><small>{r.note||'Tidak ada keterangan tambahan'}</small></td><td>{r.letter?<a className="secondary" target="_blank" rel="noreferrer" href={'/api/letter?key='+encodeURIComponent(r.letter)}><FileText size={15}/>Lihat / cetak surat</a>:<span>Belum ada lampiran</span>}</td></tr>})}</tbody></table></div>{!rows.length&&<div className="empty"><FileText size={32}/><h3>Belum ada surat izin</h3><p>Isi formulir izin. Surat dibuat otomatis dan terhubung ke absensi.</p></div>}<div className="table-foot">{rows.length} catatan izin</div></section>;
