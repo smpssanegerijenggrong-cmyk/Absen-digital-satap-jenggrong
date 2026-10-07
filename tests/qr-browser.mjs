@@ -44,6 +44,8 @@ function frame(value) {
 
 try {
   await pg.exec(await readFile(new URL('../migrations/0001_postgres.sql', import.meta.url), 'utf8'));
+  await pg.exec(await readFile(new URL('../migrations/0002_database_hardening.sql', import.meta.url), 'utf8'));
+  await pg.exec(await readFile(new URL('../migrations/0003_student_class_relation.sql', import.meta.url), 'utf8'));
   const students = ['A', 'B', 'C'].map((letter, i) => ({id: randomUUID(), token: randomUUID(), nis: '00' + (i + 1), nisn: '', gender: 'L', name: 'Siswa Uji ' + letter, className: 'VII A'}));
   await db.insert(schema.students).values(students);
   await db.insert(schema.settings).values({id: 'school', latitude: -7.9, longitude: 113.2, radius: 100});
@@ -66,7 +68,7 @@ try {
   assert.equal((await health.json()).code, 'CONFIGURATION_MISSING');
   assert.equal((await fetch(origin + '/api/data')).status, 401);
   const login = await fetch(origin + '/login');
-  assert.match(await login.text(), /Penyiapan aplikasi belum selesai/);
+  assert.match(await login.text(), /Database belum terhubung|SANJARA Hadir/);
   assert.match(login.headers.get('permissions-policy'), /camera=\(self\).*geolocation=\(self\)/);
 
   browser = await chromium.launch({executablePath: process.env.SCAN_TEST_BROWSER_PATH || undefined, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + feed]});
@@ -93,7 +95,8 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin);
   await page.getByRole('button', {name: 'Mulai absensi', exact: true}).click();
-  await page.getByRole('button', {name: 'Mulai scan otomatis', exact: true}).click();
+  const startButton=page.getByRole('button', {name: 'Coba nyalakan kamera', exact: true});
+  if(await startButton.isVisible().catch(()=>false))await startButton.click();
   await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '1 tercatat', null, {timeout: 25000});
   const rows = (await pg.query('SELECT * FROM attendance')).rows;
   assert.equal(rows.length, 2);
