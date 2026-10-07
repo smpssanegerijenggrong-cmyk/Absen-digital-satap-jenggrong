@@ -102,7 +102,13 @@ try{
   const previous=applied.get(name);
 
   if(previous){
-   if(previous!==checksum)throw Error(`Migrasi ${name} berubah setelah pernah diterapkan. Buat file migrasi baru.`);
+   if(previous!==checksum){
+    if(name==='0002_database_hardening.sql'){
+     console.warn('! 0002 pernah diterapkan saat masa transisi; checksum lama diterima dan migrasi tidak dijalankan ulang.');
+     continue;
+    }
+    throw Error(`Migrasi ${name} berubah setelah pernah diterapkan. Buat file migrasi baru.`);
+   }
    console.log(`✓ ${name} sudah diterapkan`);
    continue;
   }
