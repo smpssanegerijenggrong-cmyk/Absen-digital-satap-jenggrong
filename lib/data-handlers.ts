@@ -26,7 +26,7 @@ async function POST(req:Request){
 
  if(b.action==='class'){
  let row:ClassImport;try{row=validateImport('classes',[b])[0] as ClassImport;}catch(e){return Response.json({error:(e as Error).message},{status:400});}
- await db.insert(classrooms).values(row).onConflictDoUpdate({target:classrooms.name,set:{teacher:row.teacher,room:row.room}});return Response.json({ok:true,message:'Data kelas berhasil disimpan.'});
+ await db.insert(classrooms).values(row).onConflictDoUpdate({target:classrooms.name,set:{teacher:row.teacher,room:row.room,updatedAt:new Date().toISOString()}});return Response.json({ok:true,message:'Data kelas berhasil disimpan.'});
  }
  if(b.action==='import'){
  let rows:StudentImport[]|ClassImport[];try{rows=validateImport(String(b.mode),b.rows);}catch(e){return Response.json({error:(e as Error).message},{status:400});}
@@ -37,11 +37,11 @@ async function POST(req:Request){
  if(b.action==='settings'){
  if(!validCoordinates(b.latitude,b.longitude)||typeof b.radius!=='number'||!Number.isFinite(b.radius)||b.radius<20||b.radius>2000)return Response.json({error:'Koordinat tidak valid. Radius harus 20–2.000 meter.'},{status:400});
  const location={latitude:b.latitude as number,longitude:b.longitude as number,radius:b.radius};
- await db.insert(settings).values({id:'school',...location}).onConflictDoUpdate({target:settings.id,set:location});return Response.json({ok:true});
+ await db.insert(settings).values({id:'school',...location}).onConflictDoUpdate({target:settings.id,set:{...location,updatedAt:new Date().toISOString()}});return Response.json({ok:true});
  }
  if(b.action==='student'){
  let row:StudentImport;try{row=validateImport('students',[b])[0] as StudentImport;}catch(e){return Response.json({error:(e as Error).message},{status:400});}
- if(b.id){const result=await db.update(students).set(row).where(eq(students.id,String(b.id))).returning({id:students.id});if(!result.length)return Response.json({error:'Siswa tidak ditemukan.'},{status:404});}
+ if(b.id){const result=await db.update(students).set({...row,updatedAt:new Date().toISOString()}).where(eq(students.id,String(b.id))).returning({id:students.id});if(!result.length)return Response.json({error:'Siswa tidak ditemukan.'},{status:404});}
  else await db.insert(students).values({...row,id:crypto.randomUUID(),token:crypto.randomUUID()});return Response.json({ok:true});
  }
  if(b.action!=='attendance')return Response.json({error:'Tindakan tidak valid.'},{status:400});
