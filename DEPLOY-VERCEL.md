@@ -5,12 +5,13 @@
 3. Jangan isi Output Directory secara manual. Biarkan Vercel mendeteksi output Next.js.
 4. Hubungkan database Neon PostgreSQL dan isi `DATABASE_URL`.
 5. Tambahkan Environment Variables:
+   - `ADMIN_USERNAME` — username operator. Jika tidak diisi, default: `operator`.
    - `ADMIN_PASSWORD` — minimal 16 karakter.
    - `AUTH_SECRET` — secret acak minimal 32 karakter.
 6. Jalankan isi `migrations/0001_postgres.sql` pada SQL Editor database Neon.
 7. Redeploy aplikasi.
 8. Buka `/api/health`. Status siap adalah HTTP 200 dengan kode `READY`.
-9. Login operator, impor data siswa, atur titik lokasi sekolah, lalu uji scan QR melalui alamat HTTPS deployment.
+9. Login operator menggunakan username yang ditentukan di `ADMIN_USERNAME` (default `operator`), impor data siswa, atur titik lokasi sekolah, lalu uji scan QR melalui alamat HTTPS deployment.
 
 Catatan kamera dan GPS:
 - Kamera browser memerlukan HTTPS (kecuali localhost).
