@@ -30,6 +30,11 @@ async function POST(req:Request){
  }
  if(b.action==='import'){
  let rows:StudentImport[]|ClassImport[];try{rows=validateImport(String(b.mode),b.rows);}catch(e){return Response.json({error:(e as Error).message},{status:400});}
+ if(b.mode==='students'){
+  const names=[...new Set((rows as StudentImport[]).map(row=>row.className))];
+  const classStatements=names.map(name=>db.insert(classrooms).values({name,teacher:'',room:''}).onConflictDoNothing({target:classrooms.name}));
+  if(classStatements.length)await db.batch(classStatements as any);
+ }
  const statements=b.mode==='students'?(rows as StudentImport[]).map(row=>db.insert(students).values({...row,id:crypto.randomUUID(),token:crypto.randomUUID()}).onConflictDoNothing({target:students.nis}).returning({id:students.id})):(rows as ClassImport[]).map(row=>db.insert(classrooms).values(row).onConflictDoNothing({target:classrooms.name}).returning({id:classrooms.name}));
  const results=await db.batch(statements as any);const added=(results as unknown[][]).reduce((n,r)=>n+r.length,0);
  return Response.json({ok:true,message:`${added} data berhasil diimpor. ${rows.length-added} data yang sudah terdaftar dilewati.`});
@@ -41,6 +46,7 @@ async function POST(req:Request){
  }
  if(b.action==='student'){
  let row:StudentImport;try{row=validateImport('students',[b])[0] as StudentImport;}catch(e){return Response.json({error:(e as Error).message},{status:400});}
+ await db.insert(classrooms).values({name:row.className,teacher:'',room:''}).onConflictDoNothing({target:classrooms.name});
  if(b.id){const result=await db.update(students).set({...row,updatedAt:new Date().toISOString()}).where(eq(students.id,String(b.id))).returning({id:students.id});if(!result.length)return Response.json({error:'Siswa tidak ditemukan.'},{status:404});}
  else await db.insert(students).values({...row,id:crypto.randomUUID(),token:crypto.randomUUID()});return Response.json({ok:true});
  }

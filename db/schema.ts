@@ -1,5 +1,16 @@
 import {sql} from 'drizzle-orm';
-import {check,index,pgTable,real,text,timestamp,uniqueIndex} from 'drizzle-orm/pg-core';
+import {bigint,check,index,integer,pgTable,real,text,timestamp,uniqueIndex} from 'drizzle-orm/pg-core';
+
+export const classrooms=pgTable('classrooms',{
+ name:text('name').primaryKey(),
+ teacher:text('teacher').notNull().default(''),
+ room:text('room').notNull().default(''),
+ createdAt:timestamp('created_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
+ updatedAt:timestamp('updated_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
+},t=>[
+ index('idx_classrooms_teacher').on(t.teacher),
+ check('classrooms_name_not_blank_check',sql`btrim(${t.name}) <> ''`),
+]);
 
 export const students=pgTable('students',{
  id:text('id').primaryKey(),
@@ -7,7 +18,7 @@ export const students=pgTable('students',{
  nisn:text('nisn').notNull().default(''),
  gender:text('gender').notNull().default(''),
  name:text('name').notNull(),
- className:text('class_name').notNull(),
+ className:text('class_name').notNull().references(()=>classrooms.name,{onUpdate:'cascade',onDelete:'restrict'}),
  token:text('token').notNull().unique(),
  createdAt:timestamp('created_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
  updatedAt:timestamp('updated_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
@@ -23,7 +34,7 @@ export const students=pgTable('students',{
 
 export const attendance=pgTable('attendance',{
  id:text('id').primaryKey(),
- studentId:text('student_id').notNull().references(()=>students.id),
+ studentId:text('student_id').notNull().references(()=>students.id,{onDelete:'restrict'}),
  date:text('date').notNull(),
  time:text('time').notNull(),
  status:text('status').notNull(),
@@ -70,13 +81,16 @@ export const settings=pgTable('settings',{
  check('settings_radius_check',sql`${t.radius} between 20 and 2000`),
 ]);
 
-export const classrooms=pgTable('classrooms',{
- name:text('name').primaryKey(),
- teacher:text('teacher').notNull().default(''),
- room:text('room').notNull().default(''),
- createdAt:timestamp('created_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
- updatedAt:timestamp('updated_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
+export const loginAttempts=pgTable('login_attempts',{
+ key:text('key').primaryKey(),
+ windowStart:bigint('window_start',{mode:'number'}).notNull(),
+ attempts:integer('attempts').notNull().default(0),
 },t=>[
- index('idx_classrooms_teacher').on(t.teacher),
- check('classrooms_name_not_blank_check',sql`btrim(${t.name}) <> ''`),
+ index('idx_login_attempts_window').on(t.windowStart),
 ]);
+
+export const schemaMigrations=pgTable('schema_migrations',{
+ name:text('name').primaryKey(),
+ checksum:text('checksum').notNull(),
+ appliedAt:timestamp('applied_at',{withTimezone:true,mode:'string'}).notNull().defaultNow(),
+});

@@ -31,6 +31,13 @@ CREATE INDEX IF NOT EXISTS idx_attendance_time ON attendance(time);
 CREATE INDEX IF NOT EXISTS idx_classrooms_teacher ON classrooms(teacher);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);
 
+-- Pastikan seluruh kelas yang sudah dipakai siswa memiliki master kelas.
+INSERT INTO classrooms(name)
+SELECT DISTINCT class_name
+FROM students
+WHERE btrim(class_name) <> ''
+ON CONFLICT (name) DO NOTHING;
+
 DO $migration$
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='students_gender_check') THEN
@@ -44,6 +51,9 @@ BEGIN
  END IF;
  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='students_class_not_blank_check') THEN
   ALTER TABLE students ADD CONSTRAINT students_class_not_blank_check CHECK (btrim(class_name) <> '') NOT VALID;
+ END IF;
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='students_class_name_fkey_v2') THEN
+  ALTER TABLE students ADD CONSTRAINT students_class_name_fkey_v2 FOREIGN KEY (class_name) REFERENCES classrooms(name) ON UPDATE CASCADE ON DELETE RESTRICT NOT VALID;
  END IF;
 END
 $migration$;
