@@ -41,3 +41,8 @@
 .scan-camera-result strong{display:block;font-size:13px;letter-spacing:.5px}
 .scan-camera-result span{display:block;font-size:10px;margin-top:3px;opacity:.92}
 @keyframes scanResultIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+
+.scan-camera-result.detected{background:#174c71ed;color:#fff;border:1px solid #9bc9e7}
+.scanner-tools{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:10px}
+.scanner-tools .camera-picker{flex:1;min-width:190px;margin-top:0}
+.scanner-torch{height:38px;margin:0}

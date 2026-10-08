@@ -50,6 +50,20 @@ async function POST(req:Request){
  if(b.id){const result=await db.update(students).set({...row,updatedAt:new Date().toISOString()}).where(eq(students.id,String(b.id))).returning({id:students.id});if(!result.length)return Response.json({error:'Siswa tidak ditemukan.'},{status:404});}
  else await db.insert(students).values({...row,id:crypto.randomUUID(),token:crypto.randomUUID()});return Response.json({ok:true});
  }
+ if(b.action==='qr-status'){
+ const token=normalizeStudentQR(b.token);
+ if(!token)return Response.json({error:'QR ini bukan kartu siswa SANJARA.'},{status:400});
+ const [student]=await db.select().from(students).where(eq(students.token,token.slice(8)));
+ if(!student)return Response.json({error:'Kartu QR tidak terdaftar. Buat ulang QR dari data siswa terbaru.'},{status:404});
+ const date=jakartaDate();
+ const [previous]=await db.select().from(attendance).where(and(eq(attendance.studentId,student.id),eq(attendance.date,date)));
+ return Response.json({
+  ok:true,
+  student:{name:student.name,nis:student.nis,nisn:student.nisn,className:student.className},
+  alreadyRecorded:Boolean(previous),
+  receipt:previous?{name:student.name,nis:student.nis,nisn:student.nisn,className:student.className,status:previous.status,time:previous.time,...attendanceTiming(previous.time,previous.status)}:null
+ },{headers:{'Cache-Control':'no-store'}});
+ }
  if(b.action!=='attendance')return Response.json({error:'Tindakan tidak valid.'},{status:400});
  const method=String(b.method||'');
  if(!['QR','Manual'].includes(method))return Response.json({error:'Metode tidak valid.'},{status:400});

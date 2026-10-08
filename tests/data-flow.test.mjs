@@ -58,6 +58,14 @@ test('QR API persists attendance in PostgreSQL and safely handles repeated and c
       assert.equal((await (await api.GET()).json()).records.length, 0);
     });
 
+    await t.test('QR status identifies the student before GPS and reports existing attendance', async () => {
+      const before = await api.POST(request({action: 'qr-status', token: 'SANJARA:' + first.token}));
+      assert.equal(before.status, 200);
+      const beforeBody = await before.json();
+      assert.equal(beforeBody.student.name, first.name);
+      assert.equal(beforeBody.alreadyRecorded, false);
+    });
+
     await t.test('scan saves identity, server time and GPS; repeat returns the original receipt', async () => {
       const payload = scan(first);
       const response = await api.POST(request(payload));
@@ -66,6 +74,10 @@ test('QR API persists attendance in PostgreSQL and safely handles repeated and c
       assert.equal(result.receipt.name, first.name);
       assert.equal(result.receipt.status, 'Hadir');
       assert.equal(typeof result.receipt.late, 'boolean');
+      const status = await api.POST(request({action: 'qr-status', token: 'SANJARA:' + first.token}));
+      const statusBody = await status.json();
+      assert.equal(statusBody.alreadyRecorded, true);
+      assert.equal(statusBody.receipt.time, result.receipt.time);
       const duplicate = await api.POST(request(payload));
       assert.equal(duplicate.status, 409);
       assert.equal((await duplicate.json()).receipt.time, result.receipt.time);
