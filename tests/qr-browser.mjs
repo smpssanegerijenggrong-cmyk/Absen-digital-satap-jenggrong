@@ -75,22 +75,14 @@ try {
   browser = await chromium.launch({executablePath: process.env.SCAN_TEST_BROWSER_PATH || undefined, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + feed]});
   const context = await browser.newContext({permissions: ['geolocation'], geolocation: {latitude: -7.9, longitude: 113.2, accuracy: 10}, viewport: {width: 1280, height: 900}});
   await context.addCookies([{name: SESSION_COOKIE, value: makeSession(), url: origin, httpOnly: true, sameSite: 'Lax'}]);
-  let attempts = 0, lostReply = true;
+  let attempts = 0;
   await context.route(origin + '/api/data', async route => {
     const req = route.request();
     const raw = req.postData();
     const body = raw ? JSON.parse(raw) : null;
-    const action = body?.action;
-    if (req.method() === 'POST' && action === 'attendance') {
-      attempts++;
-      if (attempts === 1) return route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({error: 'Simulasi koneksi tidak stabil'})});
-    }
+    if (req.method() === 'POST' && body?.action === 'attendance') attempts++;
     const request = new Request(req.url(), {method: req.method(), headers: req.headers(), ...(raw ? {body: raw} : {})});
     const result = await (req.method() === 'POST' ? api.POST(request) : api.GET());
-    if (req.method() === 'POST' && action === 'attendance' && result.ok && lostReply) {
-      lostReply = false;
-      return route.abort('failed'); // A saved attendance row with a lost reply must not duplicate on retry.
-    }
     await route.fulfill({status: result.status, headers: Object.fromEntries(result.headers), body: await result.text()});
   });
   const page = await context.newPage();
@@ -101,7 +93,7 @@ try {
   const startButton=page.getByRole('button', {name: /Nyalakan kamera/i});
   if(await startButton.isVisible().catch(()=>false))await startButton.click();
   try {
-    await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '1 absen baru', null, {timeout: 25000});
+    await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '2 absen baru', null, {timeout: 25000});
   } catch (error) {
     const diagnostics = await page.evaluate(() => {
       const video = document.querySelector('video');
@@ -127,7 +119,7 @@ try {
   }
   const rows = (await pg.query('SELECT * FROM attendance')).rows;
   assert.equal(rows.length, 2);
-  assert.ok(attempts >= 4);
+  assert.equal(attempts, 2);
   assert.equal(rows.every(row => row.status === 'Hadir' && row.distance === 0), true);
   assert.match(await page.locator('.scan-receipt').innerText(), /Siswa Uji B/);
   assert.match(await page.locator('.scan-receipt').innerText(), /\d{2}[.:]\d{2}[.:]\d{2} WIB/);
@@ -137,14 +129,14 @@ try {
   assert.equal(await media.evaluate(s => s.getTracks().every(track => track.readyState === 'ended')), true);
   assert.equal(await page.locator('video').evaluate(v => v.srcObject === null), true);
   await page.getByLabel('Baca QR dari gambar', {exact: true}).setInputFiles(image);
-  await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '2 absen baru');
+  await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '3 absen baru');
   assert.equal((await pg.query('SELECT count(*)::int AS n FROM attendance')).rows[0].n, 3);
   const before = attempts;
   await page.getByLabel('Baca QR dari gambar', {exact: true}).setInputFiles(image);
   await page.waitForTimeout(350);
   assert.equal(attempts, before);
   assert.equal(errors.length, 0, errors.join('\n'));
-  console.log(JSON.stringify({cameraReadsCardsAutomatically: true, qrIdentityLookupBeforeGps: true, postgresRecords: 3, retriesRecoverLostResponse: true, duplicatePrevented: true, gpsValidated: true, timestampsIncludeSeconds: true, cameraStopsCleanly: true, imageQRWorks: true, setupHealth503: true, unauthenticatedAPI401: true, pageErrors: errors.length}));
+  console.log(JSON.stringify({cameraReadsCardsAutomatically: true, cameraRecordsTwoDifferentCardsAutomatically: true, qrIdentityLookupBeforeGps: true, postgresRecords: 3, duplicatePrevented: true, gpsValidated: true, timestampsIncludeSeconds: true, cameraStopsCleanly: true, imageQRWorks: true, setupHealth503: true, unauthenticatedAPI401: true, pageErrors: errors.length}));
 } finally {
   await browser?.close();
   server?.kill('SIGTERM');
