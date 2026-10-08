@@ -98,9 +98,33 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin);
   await page.getByRole('button', {name: 'Mulai absensi', exact: true}).click();
-  const startButton=page.getByRole('button', {name: 'Coba nyalakan kamera', exact: true});
+  const startButton=page.getByRole('button', {name: /Nyalakan kamera/i});
   if(await startButton.isVisible().catch(()=>false))await startButton.click();
-  await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '1 absen baru', null, {timeout: 25000});
+  try {
+    await page.waitForFunction(() => document.querySelector('.scanner-status b')?.textContent === '1 absen baru', null, {timeout: 25000});
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => {
+      const video = document.querySelector('video');
+      return {
+        scannerStatus: document.querySelector('.scanner-status')?.textContent,
+        engine: document.querySelector('.scanner-engine')?.textContent,
+        gps: document.querySelector('.scanner-gps')?.textContent,
+        alert: document.querySelector('.scanner-message')?.textContent,
+        cameraResult: document.querySelector('.scan-camera-result')?.textContent,
+        video: video ? {
+          readyState: video.readyState,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          paused: video.paused,
+          hasStream: Boolean(video.srcObject),
+          tracks: video.srcObject instanceof MediaStream ? video.srcObject.getTracks().map(t => ({kind:t.kind,readyState:t.readyState,label:t.label,settings:t.getSettings()})) : []
+        } : null
+      };
+    });
+    const dbRows = (await pg.query('SELECT student_id,status,time,distance FROM attendance ORDER BY time')).rows;
+    console.error('QR_CAMERA_DIAGNOSTICS', JSON.stringify({diagnostics,attempts,dbRows,pageErrors:errors}, null, 2));
+    throw error;
+  }
   const rows = (await pg.query('SELECT * FROM attendance')).rows;
   assert.equal(rows.length, 2);
   assert.ok(attempts >= 4);
