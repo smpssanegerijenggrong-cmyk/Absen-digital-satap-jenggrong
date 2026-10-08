@@ -185,7 +185,7 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
    let media:MediaStream;
    try{
     media=await navigator.mediaDevices.getUserMedia({
-     video:{...preferred,width:{ideal:1280},height:{ideal:720}},
+     video:{...preferred,width:{ideal:1920,min:640},height:{ideal:1080,min:480}},
      audio:false
     });
    }catch(e){
@@ -211,6 +211,14 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
 
    const track=media.getVideoTracks()[0];
    setCameraId(track?.getSettings().deviceId||selectedCamera);
+   try{
+    const caps=track?.getCapabilities?.() as MediaTrackCapabilities&{focusMode?:string[]};
+    if(caps?.focusMode?.includes('continuous')){
+     await track.applyConstraints({advanced:[{focusMode:'continuous'} as MediaTrackConstraintSet]});
+    }
+   }catch{
+    // Autofocus manual tidak wajib; scanner tetap berjalan.
+   }
 
    try{
     const devices=await navigator.mediaDevices.enumerateDevices();
@@ -331,36 +339,59 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
   }
  }
 
- function decodeJsQR(source:CanvasImageSource,width:number,height:number){
-  const c=canvas.current||(canvas.current=document.createElement('canvas'));
-  const ratio=Math.min(1,1280/Math.max(width,height));
-  c.width=Math.max(1,Math.round(width*ratio));
-  c.height=Math.max(1,Math.round(height*ratio));
-  const ctx=c.getContext('2d',{willReadFrequently:true});
+ function readCanvasQR(source:CanvasImageSource,sx:number,sy:number,sw:number,sh:number,target=760){
+  const qrCanvas=canvas.current||(canvas.current=document.createElement('canvas'));
+  const scale=Math.min(1,target/Math.max(sw,sh));
+  qrCanvas.width=Math.max(1,Math.round(sw*scale));
+  qrCanvas.height=Math.max(1,Math.round(sh*scale));
+  const ctx=qrCanvas.getContext('2d',{willReadFrequently:true});
   if(!ctx)throw Error('Browser tidak dapat membaca gambar kamera.');
-  ctx.drawImage(source,0,0,c.width,c.height);
-  const pixels=ctx.getImageData(0,0,c.width,c.height);
-  return jsQR(pixels.data,c.width,c.height,{inversionAttempts:'attemptBoth'})?.data||null;
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(source,sx,sy,sw,sh,0,0,qrCanvas.width,qrCanvas.height);
+  const pixels=ctx.getImageData(0,0,qrCanvas.width,qrCanvas.height);
+  return jsQR(pixels.data,qrCanvas.width,qrCanvas.height,{inversionAttempts:'attemptBoth'})?.data||null;
+ }
+
+ function decodeJsQR(source:CanvasImageSource,width:number,height:number){
+  // Prioritaskan bagian tengah yang sama dengan kotak scan di layar.
+  // QR sering terlihat kecil pada frame 16:9; crop membuat modul QR jauh lebih besar.
+  const side=Math.min(width,height)*0.82;
+  const sx=(width-side)/2;
+  const sy=(height-side)/2;
+  const center=readCanvasQR(source,sx,sy,side,side,820);
+  if(center)return center;
+
+  // Cadangan: baca seluruh frame untuk QR yang tidak tepat di tengah.
+  return readCanvasQR(source,0,0,width,height,960);
+ }
+
+ async function nativeDetectWithTimeout(v:HTMLVideoElement){
+  if(!detector.current||detectorBusy.current)return null;
+  detectorBusy.current=true;
+  try{
+   const task=detector.current.detect(v).then(results=>
+    results.find(item=>typeof item.rawValue==='string'&&item.rawValue.trim())?.rawValue||null
+   );
+   const timeout=new Promise<null>(resolve=>setTimeout(()=>resolve(null),220));
+   return await Promise.race([task,timeout]);
+  }catch{
+   detector.current=null;
+   setDecoder('Pembaca QR kompatibel aktif');
+   return null;
+  }finally{
+   detectorBusy.current=false;
+  }
  }
 
  async function decodeVideo(v:HTMLVideoElement){
-  if(detector.current&&!detectorBusy.current){
-   detectorBusy.current=true;
-   try{
-    const results=await detector.current.detect(v);
-    const raw=results.find(item=>typeof item.rawValue==='string'&&item.rawValue.trim())?.rawValue;
-    if(raw)return raw;
-   }catch{
-    detector.current=null;
-    setDecoder('Pembaca QR kompatibel aktif');
-   }finally{
-    detectorBusy.current=false;
-   }
-  }
-  return decodeJsQR(v,v.videoWidth,v.videoHeight);
+  // jsQR dijalankan lebih dulu agar scan otomatis tidak tergantung implementasi
+  // BarcodeDetector browser yang pada sebagian HP bisa lambat.
+  const jsValue=decodeJsQR(v,v.videoWidth,v.videoHeight);
+  if(jsValue)return jsValue;
+  return await nativeDetectWithTimeout(v);
  }
 
- function scheduleTick(version:number,delay=130){
+ function scheduleTick(version:number,delay=90){
   if(version!==epoch.current)return;
   if(timer.current)clearTimeout(timer.current);
   timer.current=setTimeout(()=>void tick(version),delay);
@@ -373,13 +404,18 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
   if(!recording.current&&v&&v.readyState>=2&&v.videoWidth&&v.videoHeight){
    try{
     const value=await decodeVideo(v);
-    if(value&&version===epoch.current)void record(value,version);
+    if(value&&version===epoch.current){
+     setDecoder('QR terbaca otomatis');
+     void record(value,version);
+    }else if(version===epoch.current){
+     setDecoder(detector.current?'Mencari QR otomatis · pembaca ganda aktif':'Mencari QR otomatis · jsQR aktif');
+    }
    }catch(e){
     if(mounted.current&&version===epoch.current)setError((e as Error).message);
    }
   }
 
-  if(mounted.current&&version===epoch.current)scheduleTick(version,120);
+  if(mounted.current&&version===epoch.current)scheduleTick(version,90);
  }
 
  async function scanImage(file?:File){
@@ -420,7 +456,7 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
    <video ref={video} autoPlay playsInline muted className={active||starting?'visible-video':''}/>
    {!active&&<div className="camera-placeholder">
     <ScanLine size={48}/>
-    <span>{starting?'Mengaktifkan kamera…':'Kamera akan menyala otomatis. Jika belum, tekan tombol di bawah.'}</span>
+    <span>{starting?'Mengaktifkan kamera…':'Kamera akan menyala otomatis. Arahkan QR ke kotak sampai terbaca.'}</span>
    </div>}
    {active&&<div className="scan-frame"/>}
   </div>
@@ -489,7 +525,7 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
     ?'Kamera tetap dapat membaca QR, tetapi kehadiran belum dapat disimpan sebelum Lokasi sekolah diatur.'
     :!hasStudents
      ?'Kamera aktif. Jika data siswa belum tampil, muat ulang data setelah database siap.'
-     :'QR dibaca otomatis. Dekatkan kartu, jaga tetap terang, dan posisikan QR di dalam kotak.'}
+     :'QR dibaca otomatis tanpa tombol. Posisikan QR di tengah kotak, isi sekitar 40–70% kotak, dan jaga pencahayaan cukup.'}
   </p>
 
   {!settings&&<button className="text-button" onClick={onSetup}>Atur lokasi sekolah</button>}
