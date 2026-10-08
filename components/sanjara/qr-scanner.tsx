@@ -257,6 +257,8 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
 
   recording.current=true;
   setWorking(true);
+  setReceipt(null);
+  setDecoder('QR terbaca · merekam otomatis…');
   setError('');
   let succeeded=false;
   let cooldown=2500;
@@ -314,18 +316,22 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
 
    if(response&&(response.ok||response.status===409)&&result.receipt){
     succeeded=true;
-    session.current.complete(key);
-    setReceipt({...result.receipt,duplicate:response.status===409});
+    session.current.complete(key,4000);
+    const duplicate=response.status===409;
+    setReceipt({...result.receipt,duplicate});
     setError('');
+    setDecoder(duplicate?'SUDAH ABSEN HARI INI':'ABSEN BERHASIL · TERSIMPAN OTOMATIS');
     if(response.ok){
      setCount(n=>n+1);
-     navigator.vibrate?.(80);
+     navigator.vibrate?.(100);
+    }else{
+     navigator.vibrate?.([80,60,80]);
     }
     void callback.current().catch(()=>{
      if(mounted.current)setError('Kehadiran tersimpan. Rekap belum termuat ulang; lanjut scan atau muat ulang setelah selesai.');
     });
    }else{
-    if(response?.status===404)cooldown=8000;
+    if(response?.status===404)cooldown=5000;
     throw Error(result.error||'QR terbaca, tetapi penyimpanan belum berhasil.');
    }
   }catch(e){
@@ -449,7 +455,7 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
  return <div>
   <div className="scanner-status" aria-live="polite">
    <span><i className={active?'live':''}/>{working?'QR terbaca · memeriksa lokasi & menyimpan…':starting?'Mengaktifkan kamera…':active?'Pemindai aktif · arahkan QR ke kotak':'Kamera siap dinyalakan'}</span>
-   <b>{count} tercatat</b>
+   <b>{count} absen baru</b>
   </div>
 
   <div className="camera-box">
@@ -459,6 +465,13 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
     <span>{starting?'Mengaktifkan kamera…':'Kamera akan menyala otomatis. Arahkan QR ke kotak sampai terbaca.'}</span>
    </div>}
    {active&&<div className="scan-frame"/>}
+   {receipt&&<div className={'scan-camera-result '+(receipt.duplicate?'duplicate':'success')} aria-live="assertive">
+    <CheckCheck size={30}/>
+    <div>
+     <strong>{receipt.duplicate?'SUDAH ABSEN HARI INI':'ABSEN BERHASIL'}</strong>
+     <span>{receipt.name} · {receipt.className}</span>
+    </div>
+   </div>}
   </div>
 
   <p className="scanner-engine">{decoder}</p>
@@ -492,7 +505,7 @@ export default function QRScanner({settings,hasStudents,onRecorded,onSetup}:Prop
   {receipt&&<div role="status" className={'scan-receipt '+(receipt.duplicate?'duplicate':'')}>
    <CheckCheck size={27}/>
    <div>
-    <small>{receipt.duplicate?'SUDAH TERCATAT HARI INI':'KEHADIRAN TERSIMPAN'}</small>
+    <small>{receipt.duplicate?'SUDAH ABSEN HARI INI':'ABSEN BERHASIL · TERSIMPAN OTOMATIS'}</small>
     <h3>{receipt.name}</h3>
     <p>NIPD {receipt.nis} · NISN {receipt.nisn||'—'} · {receipt.className}</p>
     <b>{receipt.status} · {clockWIB(receipt.time)} WIB{timing?.label?' · '+timing.label+(timing.late?' '+timing.lateMinutes+' menit':''):''}</b>

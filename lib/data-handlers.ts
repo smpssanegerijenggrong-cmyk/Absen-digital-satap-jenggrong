@@ -72,7 +72,7 @@ async function POST(req:Request){
  const inserted=await db.insert(attendance).values({id,studentId:student.id,date,time,status,method,reason,note,letter,parentName:leave?.parentName||null,letterData:document?JSON.stringify(document):null,...geo}).onConflictDoNothing({target:[attendance.studentId,attendance.date]}).returning({id:attendance.id});
  if(!inserted.length){
  const [previous]=await db.select().from(attendance).where(and(eq(attendance.studentId,student.id),eq(attendance.date,date)));
- return Response.json({error:'Siswa sudah tercatat pada tanggal tersebut. Catatan lama tidak diubah.',receipt:{name:student.name,nis:student.nis,nisn:student.nisn,className:student.className,status:previous.status,time:previous.time,...attendanceTiming(previous.time,previous.status)}},{status:409});
+ return Response.json({error:'Siswa sudah absen hari ini. Catatan sebelumnya tetap digunakan.',duplicate:true,receipt:{name:student.name,nis:student.nis,nisn:student.nisn,className:student.className,status:previous.status,time:previous.time,...attendanceTiming(previous.time,previous.status)}},{status:409});
  }
  return Response.json({ok:true,name:student.name,letter,receipt:{name:student.name,nis:student.nis,nisn:student.nisn,gender:student.gender,className:student.className,status,time,...attendanceTiming(time,status)}});
  }catch(e){const failure=storageError(e);return Response.json(failure,{status:failure.status,headers:{'Cache-Control':'no-store'}});}
