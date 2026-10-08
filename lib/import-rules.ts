@@ -1,10 +1,33 @@
 export type StudentImport={nis:string;nisn:string;gender:string;name:string;className:string};
 export type ClassImport={name:string;teacher:string;room:string};
 export function parseCSV(text:string):string[][]{
- const input=text.replace(/^\uFEFF/,'');const head=input.split(/\r?\n/)[0];const delimiter=head.includes(';')?';':head.includes('\t')?'\t':',';
+ let input=text.replace(/^\uFEFF/,'');
+ let forcedDelimiter:string|undefined;
+ const directive=/^sep=(.)\r?\n/i.exec(input);
+ if(directive){
+  forcedDelimiter=directive[1];
+  input=input.slice(directive[0].length);
+ }
+ const head=input.split(/\r?\n/).find(line=>line.trim())||'';
+ const candidates=[';',',','\t'];
+ const delimiter=forcedDelimiter||candidates
+  .map(char=>({char,count:head.split(char).length-1}))
+  .sort((a,b)=>b.count-a.count)[0].char;
  const rows:string[][]=[];let row:string[]=[],cell='',quoted=false;
- for(let i=0;i<input.length;i++){const c=input[i];if(c==='"'){if(quoted&&input[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(c===delimiter&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&input[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell='';}else cell+=c;}
- if(quoted)throw Error('Tanda kutip CSV tidak lengkap.');if(cell||row.length){row.push(cell);rows.push(row);}return rows;
+ for(let i=0;i<input.length;i++){
+  const c=input[i];
+  if(c==='"'){
+   if(quoted&&input[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;
+  }else if(c===delimiter&&!quoted){
+   row.push(cell);cell='';
+  }else if((c==='\n'||c==='\r')&&!quoted){
+   if(c==='\r'&&input[i+1]==='\n')i++;
+   row.push(cell);rows.push(row);row=[];cell='';
+  }else cell+=c;
+ }
+ if(quoted)throw Error('Tanda kutip CSV tidak lengkap.');
+ if(cell||row.length){row.push(cell);rows.push(row);}
+ return rows;
 }
 export function validateImport(mode:string,input:unknown){
  if(!['students','classes'].includes(mode)||!Array.isArray(input)||!input.length||input.length>200)throw Error('Impor harus berisi 1–200 baris.');
