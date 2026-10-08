@@ -47,6 +47,7 @@ try {
   await pg.exec(await readFile(new URL('../migrations/0002_database_hardening.sql', import.meta.url), 'utf8'));
   await pg.exec(await readFile(new URL('../migrations/0003_student_class_relation.sql', import.meta.url), 'utf8'));
   const students = ['A', 'B', 'C'].map((letter, i) => ({id: randomUUID(), token: randomUUID(), nis: '00' + (i + 1), nisn: '', gender: 'L', name: 'Siswa Uji ' + letter, className: 'VII A'}));
+  await db.insert(schema.classrooms).values({name: 'VII A', teacher: '', room: ''});
   await db.insert(schema.students).values(students);
   await db.insert(schema.settings).values({id: 'school', latitude: -7.9, longitude: 113.2, radius: 100});
   const card = s => 'SANJARA:' + s.token;
