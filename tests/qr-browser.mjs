@@ -121,7 +121,8 @@ try {
   assert.equal(rows.length, 2);
   assert.equal(attempts, 2);
   assert.equal(rows.every(row => row.status === 'Hadir' && row.distance === 0), true);
-  assert.match(await page.locator('.scan-receipt').innerText(), /Siswa Uji B/);
+  assert.match(await page.locator('.scan-receipt').innerText(), /Siswa Uji [AB]/);
+  assert.deepEqual(new Set(rows.map(row => row.student_id)), new Set([students[0].id, students[1].id]));
   assert.match(await page.locator('.scan-receipt').innerText(), /\d{2}[.:]\d{2}[.:]\d{2} WIB/);
   assert.equal(await page.locator('video').isVisible(), true);
   const media = await page.locator('video').evaluateHandle(v => v.srcObject);
