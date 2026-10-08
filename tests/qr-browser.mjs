@@ -79,15 +79,17 @@ try {
   await context.route(origin + '/api/data', async route => {
     const req = route.request();
     const raw = req.postData();
-    if (req.method() === 'POST' && JSON.parse(raw).action === 'attendance') {
+    const body = raw ? JSON.parse(raw) : null;
+    const action = body?.action;
+    if (req.method() === 'POST' && action === 'attendance') {
       attempts++;
       if (attempts === 1) return route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({error: 'Simulasi koneksi tidak stabil'})});
     }
     const request = new Request(req.url(), {method: req.method(), headers: req.headers(), ...(raw ? {body: raw} : {})});
     const result = await (req.method() === 'POST' ? api.POST(request) : api.GET());
-    if (req.method() === 'POST' && result.ok && lostReply) {
+    if (req.method() === 'POST' && action === 'attendance' && result.ok && lostReply) {
       lostReply = false;
-      return route.abort('failed'); // A saved row with a lost network response must not duplicate on retry.
+      return route.abort('failed'); // A saved attendance row with a lost reply must not duplicate on retry.
     }
     await route.fulfill({status: result.status, headers: Object.fromEntries(result.headers), body: await result.text()});
   });
