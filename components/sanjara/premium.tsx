@@ -18,7 +18,7 @@ function csvTemplate(mode:'students'|'classes'){
  );
 }
 function excelTemplateUrl(mode:'students'|'classes'){
- return mode==='students'?'/templates/Template-Siswa.xlsx':'/templates/Template-Kelas.xlsx';
+ return mode==='students'?'/api/template?mode=students':'/api/template?mode=classes';
 }
 export function ImportDialog({mode,onClose,onDone}:{mode:'students'|'classes';onClose:()=>void;onDone:()=>Promise<void>}){
  const [rows,setRows]=useState<StudentImport[]|ClassImport[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[filename,setFilename]=useState(''),[result,setResult]=useState('');
