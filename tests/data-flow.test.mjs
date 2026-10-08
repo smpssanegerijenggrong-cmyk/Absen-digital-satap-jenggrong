@@ -14,9 +14,13 @@ test('QR API persists attendance in PostgreSQL and safely handles repeated and c
   const pg = new PGlite();
   const db = drizzle(pg, {schema});
   const api = createDataHandlers({authorize: async () => true, database: () => db});
-  const migration = await readFile(new URL('../migrations/0001_postgres.sql', import.meta.url), 'utf8');
-  await pg.exec(migration);
-  await pg.exec(migration); // The setup SQL must preserve data on repeat runs.
+  const migration1 = await readFile(new URL('../migrations/0001_postgres.sql', import.meta.url), 'utf8');
+  const migration2 = await readFile(new URL('../migrations/0002_database_hardening.sql', import.meta.url), 'utf8');
+  const migration3 = await readFile(new URL('../migrations/0003_student_class_relation.sql', import.meta.url), 'utf8');
+  await pg.exec(migration1);
+  await pg.exec(migration1); // Initial setup must preserve data on repeat runs.
+  await pg.exec(migration2);
+  await pg.exec(migration3);
   try {
     await t.test('operator authorization is checked before accessing the database', async () => {
       const blocked = createDataHandlers({authorize: async () => false, database: () => {throw Error('must not access DB');}});
